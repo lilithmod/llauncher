@@ -53,7 +53,8 @@ size_t save_data(char *buf, size_t size, size_t nmemb, void *ptr) {
 
 // size_t size is always one
 size_t write_data(char *buf, size_t size, size_t nmenb, vector *vec) {
-  if (nmenb + vec->len >= vec->size) {
+  (void)size;
+  if ((ssize_t)(nmenb + vec->len) >= vec->size) {
     vec->data = realloc(vec->data, (nmenb + vec->len) * 2);
     if (!vec->data)
       return 0;
@@ -97,6 +98,22 @@ bool includes_string(int c, char **strs, char *incl) {
   return c >= 0;
 }
 
+char *read_file(char *path) {
+  FILE *file = fopen(path, "rb");
+  if (!file)
+    return NULL;
+
+  fseek(file, 0, SEEK_END);
+  long file_size = ftell(file);
+  rewind(file);
+
+  char *buf = malloc(file_size + 1);
+  fread(buf, 1, file_size, file);
+  buf[file_size] = 0;
+  fclose(file);
+  return buf;
+}
+
 int main(int argc, char **argv) {
   VERBOSE = includes_string(argc, argv, "-V");
   VERBOSE |= includes_string(argc, argv, "--verbose");
@@ -119,6 +136,50 @@ int main(int argc, char **argv) {
   char *lilith_exec_path = NULL;
   FILE *lilith_exec_new = NULL;
 
+  char *config_path = NULL;
+  char *raw_config = NULL;
+  JSONElement *config_json = NULL;
+  JSONElement *config_alpha_enabled = NULL;
+  bool alpha_enabled = false;
+
+  char *home = home_dir();
+
+  if (!home) {
+    lprint("Could not get home directory. Is your platform supported?\n");
+    goto error;
+  }
+  debug("home_dir: %s\n", home);
+
+  lilith_dir = path_join(home, ".lilith");
+  debug("lilith_dir: %s\n", lilith_dir);
+  if (!create_dir(lilith_dir)) {
+    lprint("Could not create necessary Lilith directory!\n");
+    goto error;
+  };
+
+  config_path = path_join(lilith_dir, "config.json");
+  debug("config_path: %s\n", config_path);
+  if (access(config_path, F_OK) == 0) {
+    raw_config = read_file(config_path);
+    if (!raw_config) {
+      debug("could not read config file despite existing!\n");
+    } else {
+      debug("raw_config: '%s'\n", raw_config);
+
+      config_json = JSON_parse(raw_config);
+      if (!config_json) {
+        debug("failed to parse config\n");
+      } else {
+        config_alpha_enabled = JSON_get("alpha", config_json);
+        if (!config_alpha_enabled) {
+          debug("couldnt get alpha field\n");
+        } else if (config_alpha_enabled->JSONType == JSONType_BOOLEAN) {
+          alpha_enabled = config_alpha_enabled->value.boolean;
+        }
+      }
+    }
+  }
+
   if (curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK) {
     lprint("Could not initialize libcurl!");
     goto error;
@@ -128,9 +189,16 @@ int main(int argc, char **argv) {
     lprint("Failed to get cURL handle!");
     goto error;
   }
-  curl_easy_setopt(curl, CURLOPT_URL,
-                   "https://api.lilith.rip/versions/"
-                   "latest?compact_changelog=true&digests=true");
+  if (alpha_enabled) {
+    curl_easy_setopt(curl, CURLOPT_URL,
+                     "https://api.lilith.rip/versions/"
+                     "alpha?compact_changelog=true&digests=true");
+  } else {
+    curl_easy_setopt(curl, CURLOPT_URL,
+                     "https://api.lilith.rip/versions/"
+                     "latest?compact_changelog=true&digests=true");
+  }
+
   curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
   curl_easy_setopt(curl, CURLOPT_CA_CACHE_TIMEOUT, 604800L);
 
@@ -156,20 +224,6 @@ int main(int argc, char **argv) {
   }
 
   release_json = JSON_parse((char *)release_response->data);
-
-  char *home = home_dir();
-  if (!home) {
-    lprint("Could not get home directory. Is your platform supported?\n");
-    goto error;
-  }
-  debug("home_dir: %s\n", home);
-
-  lilith_dir = path_join(home_dir(), ".lilith");
-  debug("lilith_dir: %s\n", home);
-  if (create_dir(lilith_dir)) {
-    lprint("Could not create necessary Lilith directory!\n");
-    goto error;
-  };
 
   release_version = JSON_get("version", release_json);
   release_changelog = JSON_get("changelog", release_json);
@@ -266,12 +320,27 @@ int main(int argc, char **argv) {
   }
   debug("chmod: success\n");
 #endif
-  debug("launching lilith");
-  char *lilith_flags[] = {lilith_exec_path, "--iknowwhatimdoing", NULL};
-  if (!run_executable(lilith_exec_path, lilith_flags)) {
-    lprint("Could not launch Lilith :(\n");
-    goto error;
+  int tries = 0;
+  while (tries < 3) {
+    debug("launching lilith");
+    char *lilith_flags[] = {lilith_exec_path, "--iknowwhatimdoing", NULL};
+    if (!run_executable(lilith_exec_path, lilith_flags)) {
+      lprint("Could not launch Lilith :(\n");
+      if (tries < 2)
+        lprint("Trying to relaunch...\n");
+      tries++;
+    }
   }
+  lprint("Deleting Lilith...\n");
+  lprint("You might want to retry after that (Lilith will be reinstalled on "
+         "relaunch).\n");
+  if (remove(lilith_exec_path) != 0) {
+    lprint("Couldn't remove Lilith, you might want to run the following in "
+           "terminal:\n");
+    lprint("`rm %s`\n%s", lilith_exec_path, );
+  }
+
+  goto error;
 error:
   if (errno != 0)
     perror("Error");
@@ -291,5 +360,10 @@ cleanup:
   free(lilith_dir);
   free(lilith_exec_path);
   fclose(lilith_exec_new);
+
+  free(config_path);
+  free(raw_config);
+  JSON_free(config_json);
+
   exit(0);
 }
