@@ -26,7 +26,7 @@ static bool VERBOSE = false;
  * will exit(1) on failure
  */
 bool create_dir(char *path) {
-  if (mkdir(path, 0777) != -1 && errno != EEXIST) {
+  if (mkdir(path, 0777) == -1 && errno != EEXIST) {
     lprint("Could not create launcher folder at: '%s'%s\n", path, );
     return false;
   }
@@ -116,7 +116,7 @@ char *read_file(char *path) {
 }
 
 int main(int argc, char **argv) {
-  VERBOSE = includes_string(argc, argv, "-V");
+  VERBOSE |= includes_string(argc, argv, "-V");
   VERBOSE |= includes_string(argc, argv, "--verbose");
 
   char *tmp = NULL;
