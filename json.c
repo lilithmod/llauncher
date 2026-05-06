@@ -78,7 +78,8 @@ JSONElement *_JSON_parse(char *data, size_t *cursor_ptr) {
       ADVANCE_CURSOR(data, (*cursor_ptr));
 
       JSONElement *child = _JSON_parse(data, cursor_ptr);
-      debug("exiting children(s) on char: `%c`\n", data[(*cursor_ptr)]);
+      debug("exiting children(s) on char: `%c`, cursor: %zu\n",
+            data[(*cursor_ptr)], *cursor_ptr);
       if (!child) {
         // the child errored
         return NULL;
@@ -241,7 +242,7 @@ JSONElement *_JSON_parse(char *data, size_t *cursor_ptr) {
   }
 
   printf("NO_MATCH | format error at cursor pos: %zu, expected a "
-         "JSElement\ngot char: `%c`\n",
+         "JSONElement\ngot char: `%c`\n",
          (*cursor_ptr), data[(*cursor_ptr)]);
   free(element);
   return NULL;
@@ -380,24 +381,7 @@ void JSON_free(JSONElement *element) {
 int tests() {
   // char *bb = malloc(1024);
   // bb = NULL;
-  char *data =
-      "{\"version\":\"v2.0.13\",\"name\":\"v2.0.13\",\"changelog\":\"# "
-      "v2.0.13\\r\\n- Fix chatstats failing on untagged players,\\r\\n- Use "
-      "default `/sc` gamemode on player "
-      "statcheck\",\"download\":{\"windows\":\"https://github.com/lilithmod/"
-      "releases/releases/download/v2.0.13/"
-      "lilith-windows-2.0.13.exe\",\"macos\":\"https://github.com/lilithmod/"
-      "releases/releases/download/v2.0.13/"
-      "lilith-macos-2.0.13\",\"linux\":\"https://github.com/lilithmod/releases/"
-      "releases/download/v2.0.13/"
-      "lilith-linux-2.0.13\"},\"sizes\":{\"windows\":149713920,\"macos\":"
-      "196997026,\"linux\":135215424},\"digests\":{\"windows\":\"sha256:"
-      "4e02040f815cfa167dfd55adeebc3f2e19af6c2a89e8996737ff78ff8dc34f9e\","
-      "\"macos\":\"sha256:"
-      "764a194cf2ba70b89c53ded16e00d758de52939ba32ab5d7ea8f00852786a843\","
-      "\"linux\":\"sha256:"
-      "5e029b50f827340884a1c8575fcfc34a464c8ad1c960e8a4a88374bb08a0645f\"}}";
-  size_t cu = 0;
+  char *data = "{\"alpha\":true}\n";
   JSONElement *el = JSON_parse(data);
   char *pref = "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t";
   printf("\n");

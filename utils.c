@@ -50,7 +50,7 @@ vector *get_vector(size_t size, uint8_t *initial_data,
   return vec;
 }
 size_t append_vector(vector *vec, uint8_t *data, size_t nb) {
-  if (nb + vec->len >= vec->size) {
+  if ((ssize_t)(nb + vec->len) >= vec->size) {
     vec->data = realloc(vec->data, (nb + vec->len) * 2);
     if (!vec->data)
       return 0;
@@ -112,9 +112,9 @@ char *unescape(char *string) {
   size_t r = 0;
   while (string[c] != '\0') {
     if (string[c] == '\\') {
-      if (replacer[string[c + 1]] != 0) {
-        if (replacer[string[c + 1]] != -1)
-          string[r++] = replacer[string[c + 1]];
+      if (replacer[(unsigned char)string[c + 1]] != 0) {
+        if (replacer[(unsigned char)string[c + 1]] != -1)
+          string[r++] = replacer[(unsigned char)string[c + 1]];
         c = c + 2;
       } else {
         string[r++] = string[c++];
